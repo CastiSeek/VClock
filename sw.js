@@ -1,23 +1,33 @@
-importScripts('https://www.gstatic.com/firebasejs/9.6.0/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/9.6.0/firebase-messaging-compat.js');
+const CACHE_NAME = 'gentle-alarm-v1';
+const ASSETS = [
+  '/',
+  '/index.html',
+  '/Alarms/001.mp3',
+  '/Alarms/002.mp3',
+  '/icon-192.png',
+  '/icon-512.png'
+];
 
-// Тот же конфиг Firebase
-firebase.initializeApp({
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT.firebaseapp.com",
-    projectId: "YOUR_PROJECT",
-    storageBucket: "YOUR_PROJECT.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME)
+      .then(cache => cache.addAll(ASSETS))
+  );
 });
 
-const messaging = firebase.messaging();
+self.addEventListener('fetch', event => {
+  event.respondWith(
+    caches.match(event.request)
+      .then(response => response || fetch(event.request))
+  );
+});
 
-// Обработчик фоновых уведомлений
-messaging.onBackgroundMessage(payload => {
-    self.registration.showNotification(payload.notification.title, {
-        body: payload.notification.body,
-        icon: 'icon.png',
-        vibrate: [200, 100, 200]
+self.addEventListener('message', event => {
+  if (event.data.action === 'triggerAlarm') {
+    self.registration.showNotification('Wake Up!', {
+      body: 'Your alarm is going off!',
+      icon: 'icon-192.png',
+      vibrate: [200, 100, 200, 100, 200]
     });
+  }
 });

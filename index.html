@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121212">
+    <title>Gentle Wake Alarm</title>
+    <style>
+        :root {
+            --primary: #4285f4;
+            --background: #121212;
+            --surface: #1e1e1e;
+            --on-surface: #ffffff;
+            --positive: #4CAF50;
+            --meditation: #9C27B0;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Roboto', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        body {
+            background-color: var(--background);
+            color: var(--on-surface);
+            height: 100vh;
+            overflow: hidden;
+            transition: background-color 30s linear;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            padding: 20px;
+            transition: opacity 0.5s ease;
+        }
+        
+        .time-input {
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        input[type="time"] {
+            background: transparent;
+            border: none;
+            color: var(--on-surface);
+            font-size: 3rem;
+            text-align: center;
+            width: 100%;
+        }
+        
+        input[type="time"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.6;
+        }
+        
+        .button-group {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 20px 0;
+        }
+        
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            font-size: 1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            min-width: 160px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        button:active {
+            transform: translateY(0);
+        }
+        
+        #fullscreenBtn {
+            background: var(--meditation);
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            min-width: auto;
+            padding: 10px 15px;
+        }
+        
+        #stopBtn {
+            position: absolute;
+            background: #f44336;
+            display: none;
+            z-index: 100;
+            pointer-events: auto;
+        }
+        
+        #positiveBtn {
+            background: var(--positive);
+            display: none;
+        }
+        
+        #meditationBtn {
+            background: var(--meditation);
+            display: none;
+        }
+        
+        .status {
+            margin-top: 20px;
+            font-size: 1rem;
+            opacity: 0.8;
+            text-align: center;
+            max-width: 80%;
+        }
+        
+        .hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        .affirmation {
+            position: absolute;
+            font-size: 1.5rem;
+            opacity: 0;
+            transition: opacity 1s ease;
+            text-align: center;
+            width: 80%;
+        }
+        
+        .wake-options {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .instructions {
+            background: rgba(0, 0, 0, 0.7);
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            max-width: 80%;
+            display: none;
+        }
+        
+        .instructions.show {
+            display: block;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="interface">
+        <h1>Gentle Wake Alarm</h1>
+        
+        <div class="time-input">
+            <input type="time" id="alarmTime" required>
+        </div>
+        
+        <div class="button-group">
+            <button id="setAlarm">Set Alarm</button>
+            <button id="installPrompt">Install App</button>
+        </div>
+        <button id="fullscreenBtn">Fullscreen</button>
+        
+        <div class="wake-options" id="wakeOptions">
+            <h3>How would you like to wake up?</h3>
+            <button id="positiveBtn">Positive Affirmations</button>
+            <button id="meditationBtn">2-Minute Meditation</button>
+        </div>
+        
+        <div class="status" id="status">No alarm set</div>
+        
+        <div class="instructions" id="instructions">
+            <button class="close-btn" id="closeInstructions">×</button>
+            <h3>For best experience:</h3>
+            <ol>
+                <li>Open in Chrome browser</li>
+                <li>Tap the 3-dot menu</li>
+                <li>Select "Add to Home screen"</li>
+                <li>Open from your home screen</li>
+                <li>Set your alarm and minimize</li>
+            </ol>
+            <p>The alarm will work even when the app is closed!</p>
+        </div>
+    </div>
+    
+    <button id="stopBtn">STOP</button>
+    <div id="affirmation" class="affirmation"></div>
+    
+    <audio id="alarmSound"></audio>
+    <audio id="meditationSound" src="https://assets.mixkit.co/music/preview/mixkit-zen-meditation-573.mp3"></audio>
+    
+    <script>
+        // Elements
+        const interfaceEl = document.getElementById('interface');
+        const alarmTime = document.getElementById('alarmTime');
+        const setAlarmBtn = document.getElementById('setAlarm');
+        const stopBtn = document.getElementById('stopBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const positiveBtn = document.getElementById('positiveBtn');
+        const meditationBtn = document.getElementById('meditationBtn');
+        const wakeOptions = document.getElementById('wakeOptions');
+        const statusEl = document.getElementById('status');
+        const affirmationEl = document.getElementById('affirmation');
+        const alarmSound = document.getElementById('alarmSound');
+        const meditationSound = document.getElementById('meditationSound');
+        const installPrompt = document.getElementById('installPrompt');
+        const instructions = document.getElementById('instructions');
+        const closeInstructions = document.getElementById('closeInstructions');
+        
+        // State variables
+        let alarmTimeout;
+        let fadeInterval;
+        let volumeInterval;
+        let alarmIsSet = false;
+        let stopBtnVelocity = { x: 2, y: 2 };
+        let stopBtnPosition = { x: 0, y: 0 };
+        let animationFrame;
+        let affirmationInterval;
+        let deferredPrompt;
+
+        // Initialize
+        init();
+        
+        function init() {
+            setupEventListeners();
+            setDefaultTime();
+            checkSavedAlarm();
+        }
+        
+        function setupEventListeners() {
+            // Button events
+            setAlarmBtn.addEventListener('click', handleSetAlarm);
+            stopBtn.addEventListener('click', clearAlarm);
+            fullscreenBtn.addEventListener('click', toggleFullscreen);
+            positiveBtn.addEventListener('click', startAffirmations);
+            meditationBtn.addEventListener('click', startMeditation);
+            installPrompt.addEventListener('click', showInstallInstructions);
+            closeInstructions.addEventListener('click', hideInstallInstructions);
+            
+            // PWA installation
+            window.addEventListener('beforeinstallprompt', (e) => {
+                e.preventDefault();
+                deferredPrompt = e;
+                installPrompt.style.display = 'block';
+            });
+            
+            // Window events
+            window.addEventListener('resize', handleWindowResize);
+        }
+        
+        function setDefaultTime() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = (now.getMinutes() + 1).toString().padStart(2, '0');
+            alarmTime.value = `${hours}:${minutes}`;
+        }
+        
+        function checkSavedAlarm() {
+            const savedAlarm = localStorage.getItem('gentleAlarm');
+            if (savedAlarm) {
+                const alarmData = JSON.parse(savedAlarm);
+                const alarmDate = new Date(parseInt(alarmData.time));
+                const now = new Date();
+                
+                if (alarmDate > now) {
+                    const timeUntilAlarm = alarmDate - now;
+                    alarmTimeout = setTimeout(triggerAlarm, timeUntilAlarm);
+                    alarmIsSet = true;
+                    setAlarmBtn.textContent = 'Cancel Alarm';
+                    statusEl.textContent = `Alarm set for ${alarmDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+                    wakeOptions.style.display = 'flex';
+                    interfaceEl.classList.add('hidden');
+                } else {
+                    localStorage.removeItem('gentleAlarm');
+                }
+            }
+        }
+        
+        // Fullscreen functionality
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log(`Fullscreen error: ${err.message}`);
+                });
+                fullscreenBtn.textContent = 'Exit Fullscreen';
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                    fullscreenBtn.textContent = 'Fullscreen';
+                }
+            }
+        }
+        
+        // Install instructions
+        function showInstallInstructions() {
+            instructions.classList.add('show');
+        }
+        
+        function hideInstallInstructions() {
+            instructions.classList.remove('show');
+        }
+        
+        // Alarm functions
+        function handleSetAlarm() {
+            if (!alarmTime.value) {
+                statusEl.textContent = "Please set a time first";
+                return;
+            }
+            
+            if (alarmIsSet) {
+                clearAlarm();
+                return;
+            }
+            
+            const now = new Date();
+            const selectedTime = alarmTime.value.split(':');
+            const alarmDate = new Date(
+                now.getFullYear(),
+                now.getMonth(),
+                now.getDate(),
+                parseInt(selectedTime[0]),
+                parseInt(selectedTime[1])
+            );
+            
+            if (alarmDate <= now) {
+                alarmDate.setDate(alarmDate.getDate() + 1);
+            }
+            
+            const timeUntilAlarm = alarmDate - now;
+            
+            alarmTimeout = setTimeout(triggerAlarm, timeUntilAlarm);
+            
+            alarmIsSet = true;
+            setAlarmBtn.textContent = 'Cancel Alarm';
+            statusEl.textContent = `Alarm set for ${alarmDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            wakeOptions.style.display = 'flex';
+            
+            setTimeout(() => {
+                interfaceEl.classList.add('hidden');
+            }, 1000);
+            
+            localStorage.setItem('gentleAlarm', JSON.stringify({
+                time: alarmDate.getTime(),
+                mode: 'standard'
+            }));
+        }
+        
+        function clearAlarm() {
+            clearTimeout(alarmTimeout);
+            clearInterval(fadeInterval);
+            clearInterval(volumeInterval);
+            cancelAnimationFrame(animationFrame);
+            clearInterval(affirmationInterval);
+            
+            alarmSound.pause();
+            alarmSound.currentTime = 0;
+            alarmSound.volume = 1;
+            meditationSound.pause();
+            meditationSound.currentTime = 0;
+            
+            body.style.backgroundColor = 'var(--background)';
+            stopBtn.style.display = 'none';
+            positiveBtn.style.display = 'none';
+            meditationBtn.style.display = 'none';
+            wakeOptions.style.display = 'none';
+            interfaceEl.classList.remove('hidden');
+            affirmationEl.style.opacity = '0';
+            alarmIsSet = false;
+            setAlarmBtn.textContent = 'Set Alarm';
+            statusEl.textContent = 'No alarm set';
+            
+            localStorage.removeItem('gentleAlarm');
+        }
+        
+        function triggerAlarm() {
+            setRandomAlarmSound();
+            
+            // Fade to warm light
+            let brightness = 0;
+            fadeInterval = setInterval(() => {
+                brightness += 0.005;
+                if (brightness >= 1) brightness = 1;
+                
+                const r = Math.floor(255 * brightness);
+                const g = Math.floor(180 * brightness);
+                const b = Math.floor(50 * brightness);
+                body.style.backgroundColor = `rgb(${r}, ${g}, ${b})`;
+                
+                if (brightness >= 1) clearInterval(fadeInterval);
+            }, 50);
+            
+            // Fade in volume
+            alarmSound.volume = 0;
+            alarmSound.loop = true;
+            alarmSound.play();
+            
+            volumeInterval = setInterval(() => {
+                if (alarmSound.volume < 0.6) {
+                    alarmSound.volume += 0.005;
+                } else {
+                    clearInterval(volumeInterval);
+                }
+            }, 500);
+            
+            // Show wake options
+            positiveBtn.style.display = 'block';
+            meditationBtn.style.display = 'block';
+            
+            // Show bouncing STOP button
+            stopBtn.style.display = 'block';
+            stopBtnPosition = {
+                x: Math.random() * (window.innerWidth - stopBtn.offsetWidth),
+                y: Math.random() * (window.innerHeight - stopBtn.offsetHeight)
+            };
+            stopBtnVelocity = {
+                x: (Math.random() > 0.5 ? 1 : -1) * 1.5,
+                y: (Math.random() > 0.5 ? 1 : -1) * 1.5
+            };
+            updateStopBtnPosition();
+            startBouncing();
+            
+            // Check saved wake mode
+            const savedAlarm = localStorage.getItem('gentleAlarm');
+            if (savedAlarm) {
+                const alarmData = JSON.parse(savedAlarm);
+                if (alarmData.mode === 'affirmations') startAffirmations();
+                else if (alarmData.mode === 'meditation') startMeditation();
+            }
+        }
+        
+        function setRandomAlarmSound() {
+            const randomIndex = Math.floor(Math.random() * 2) + 1;
+            alarmSound.src = `Alarms/00${randomIndex}.mp3`;
+        }
+        
+        // Wake modes
+        function startAffirmations() {
+            const affirmations = [
+                "Today will be a great day",
+                "You are capable of amazing things",
+                "Good morning! The world needs your light",
+                "You wake up with strength and clarity",
+                "Today is full of possibilities"
+            ];
+            
+            let current = 0;
+            showAffirmation();
+            
+            affirmationInterval = setInterval(showAffirmation, 8000);
+            
+            function showAffirmation() {
+                affirmationEl.textContent = affirmations[current];
+                affirmationEl.style.opacity = '1';
+                
+                setTimeout(() => {
+                    affirmationEl.style.opacity = '0';
+                }, 6000);
+                
+                current = (current + 1) % affirmations.length;
+            }
+        }
+        
+        function startMeditation() {
+            meditationSound.volume = 0.5;
+            meditationSound.loop = true;
+            meditationSound.play();
+            
+            affirmationEl.textContent = "Breathe in... Breathe out... Let go of tension...";
+            affirmationEl.style.opacity = '1';
+        }
+        
+        // Bouncing button
+        function startBouncing() {
+            animationFrame = requestAnimationFrame(updateBouncing);
+        }
+        
+        function updateBouncing() {
+            stopBtnPosition.x += stopBtnVelocity.x;
+            stopBtnPosition.y += stopBtnVelocity.y;
+            
+            if (stopBtnPosition.x <= 0 || stopBtnPosition.x >= window.innerWidth - stopBtn.offsetWidth) {
+                stopBtnVelocity.x *= -1;
+            }
+            
+            if (stopBtnPosition.y <= 0 || stopBtnPosition.y >= window.innerHeight - stopBtn.offsetHeight) {
+                stopBtnVelocity.y *= -1;
+            }
+            
+            updateStopBtnPosition();
+            animationFrame = requestAnimationFrame(updateBouncing);
+        }
+        
+        function updateStopBtnPosition() {
+            stopBtn.style.left = `${stopBtnPosition.x}px`;
+            stopBtn.style.top = `${stopBtnPosition.y}px`;
+        }
+        
+        // Window resize handler
+        function handleWindowResize() {
+            if (stopBtn.style.display === 'block') {
+                stopBtnPosition.x = Math.min(stopBtnPosition.x, window.innerWidth - stopBtn.offsetWidth);
+                stopBtnPosition.y = Math.min(stopBtnPosition.y, window.innerHeight - stopBtn.offsetHeight);
+                updateStopBtnPosition();
+            }
+        }
+    </script>
+</body>
+</html>

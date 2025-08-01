@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gentle-alarm-v2';
+const CACHE_NAME = 'gentle-alarm-v3';
 const ASSETS = [
   '/',
   '/index.html',

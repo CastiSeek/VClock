@@ -109,9 +109,6 @@
             display: none;
             z-index: 100;
             pointer-events: auto;
-            padding: 15px 30px;
-            font-size: 1.2rem;
-            border-radius: 50px;
         }
         
         #positiveBtn {
@@ -144,11 +141,6 @@
             transition: opacity 1s ease;
             text-align: center;
             width: 80%;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #000;
-            font-weight: bold;
         }
         
         .wake-options {
@@ -288,7 +280,22 @@
             fullscreenBtn.addEventListener('click', toggleFullscreen);
             positiveBtn.addEventListener('click', startAffirmations);
             meditationBtn.addEventListener('click', startMeditation);
-            installPrompt.addEventListener('click', showInstallInstructions);
+            
+            // PWA installation events
+            installPrompt.addEventListener('click', () => {
+                if (deferredPrompt) {
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then(choiceResult => {
+                        if (choiceResult.outcome === 'accepted') {
+                            console.log('User accepted the install prompt');
+                        }
+                        deferredPrompt = null;
+                    });
+                } else {
+                    showInstallInstructions();
+                }
+            });
+            
             closeInstructions.addEventListener('click', hideInstallInstructions);
             
             // PWA installation
@@ -334,12 +341,10 @@
             setAlarmBtn.textContent = 'Cancel Alarm';
             statusEl.textContent = `Alarm set for ${alarmDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
             wakeOptions.style.display = 'flex';
-            setTimeout(() => {
-                interfaceEl.classList.add('hidden');
-            }, 500);
+            interfaceEl.classList.add('hidden');
         }
         
-        // Fullscreen functionality
+        // Fullscreen functionality - FIXED
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
                 document.documentElement.requestFullscreen().catch(err => {
@@ -380,7 +385,7 @@
             }
         }
         
-        // Alarm functions
+        // Alarm functions - FIXED
         function handleSetAlarm() {
             if (!alarmTime.value) {
                 statusEl.textContent = "Please set a time first";
@@ -423,7 +428,7 @@
         
         // Stop alarm
         function clearAlarm() {
-            clearTimeout(alarmTimeout);
+            if (alarmTimeout) clearTimeout(alarmTimeout);
             if (fadeInterval) clearInterval(fadeInterval);
             if (volumeInterval) clearInterval(volumeInterval);
             if (animationFrame) cancelAnimationFrame(animationFrame);
@@ -470,7 +475,7 @@
             // Fade in volume
             alarmSound.volume = 0;
             alarmSound.loop = true;
-            alarmSound.play().catch(e => console.log("Audio play error:", e));
+            alarmSound.play();
             
             volumeInterval = setInterval(() => {
                 if (alarmSound.volume < 0.6) {
@@ -491,8 +496,8 @@
                 y: Math.random() * (window.innerHeight - stopBtn.offsetHeight)
             };
             stopBtnVelocity = {
-                x: (Math.random() > 0.5 ? 1 : -1) * 2,
-                y: (Math.random() > 0.5 ? 1 : -1) * 2
+                x: (Math.random() > 0.5 ? 1 : -1) * 1.5,
+                y: (Math.random() > 0.5 ? 1 : -1) * 1.5
             };
             updateStopBtnPosition();
             startBouncing();
@@ -509,7 +514,6 @@
         function setRandomAlarmSound() {
             const randomIndex = Math.floor(Math.random() * 2) + 1;
             alarmSound.src = `Alarms/00${randomIndex}.mp3`;
-            console.log("Alarm sound set to:", alarmSound.src);
         }
         
         // Wake modes
@@ -543,7 +547,7 @@
             meditationSound.src = "https://assets.mixkit.co/music/preview/mixkit-zen-meditation-573.mp3";
             meditationSound.volume = 0.5;
             meditationSound.loop = true;
-            meditationSound.play().catch(e => console.log("Meditation sound error:", e));
+            meditationSound.play();
             
             affirmationEl.textContent = "Breathe in... Breathe out... Let go of tension...";
             affirmationEl.style.opacity = '1';
@@ -558,25 +562,25 @@
             stopBtnPosition.x += stopBtnVelocity.x;
             stopBtnPosition.y += stopBtnVelocity.y;
             
-            // Boundary collision detection
+            // Boundary checks
+            const maxX = window.innerWidth - stopBtn.offsetWidth;
+            const maxY = window.innerHeight - stopBtn.offsetHeight;
+            
             if (stopBtnPosition.x <= 0) {
                 stopBtnPosition.x = 0;
                 stopBtnVelocity.x *= -1;
-            } else if (stopBtnPosition.x >= window.innerWidth - stopBtn.offsetWidth) {
-                stopBtnPosition.x = window.innerWidth - stopBtn.offsetWidth;
+            } else if (stopBtnPosition.x >= maxX) {
+                stopBtnPosition.x = maxX;
                 stopBtnVelocity.x *= -1;
             }
             
             if (stopBtnPosition.y <= 0) {
                 stopBtnPosition.y = 0;
                 stopBtnVelocity.y *= -1;
-            } else if (stopBtnPosition.y >= window.innerHeight - stopBtn.offsetHeight) {
-                stopBtnPosition.y = window.innerHeight - stopBtn.offsetHeight;
+            } else if (stopBtnPosition.y >= maxY) {
+                stopBtnPosition.y = maxY;
                 stopBtnVelocity.y *= -1;
             }
             
             updateStopBtnPosition();
-            animationFrame = requestAnimationFrame(updateBouncing);
-        }
-        
-        function updateStopBtnPosition(
+            anima

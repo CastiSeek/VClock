@@ -4,7 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#121212">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Gentle Wake Alarm</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icon-192.png">
     <style>
         :root {
             --primary: #4285f4;
@@ -28,6 +32,7 @@
             height: 100vh;
             overflow: hidden;
             transition: background-color 30s linear;
+            -webkit-tap-highlight-color: transparent;
         }
         
         .container {
@@ -104,6 +109,9 @@
             display: none;
             z-index: 100;
             pointer-events: auto;
+            padding: 15px 30px;
+            font-size: 1.2rem;
+            border-radius: 50px;
         }
         
         #positiveBtn {
@@ -136,6 +144,11 @@
             transition: opacity 1s ease;
             text-align: center;
             width: 80%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #000;
+            font-weight: bold;
         }
         
         .wake-options {
@@ -168,6 +181,12 @@
             color: white;
             font-size: 1.5rem;
             cursor: pointer;
+        }
+        
+        @media (display-mode: standalone) {
+            #installPrompt {
+                display: none;
+            }
         }
     </style>
 </head>
@@ -211,9 +230,18 @@
     <div id="affirmation" class="affirmation"></div>
     
     <audio id="alarmSound"></audio>
-    <audio id="meditationSound" src="https://assets.mixkit.co/music/preview/mixkit-zen-meditation-573.mp3"></audio>
+    <audio id="meditationSound"></audio>
     
     <script>
+        // Register Service Worker for background functionality
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').then(registration => {
+                console.log('Service Worker registered');
+            }).catch(error => {
+                console.log('Service Worker registration failed:', error);
+            });
+        }
+
         // Elements
         const interfaceEl = document.getElementById('interface');
         const alarmTime = document.getElementById('alarmTime');
@@ -230,6 +258,7 @@
         const installPrompt = document.getElementById('installPrompt');
         const instructions = document.getElementById('instructions');
         const closeInstructions = document.getElementById('closeInstructions');
+        const body = document.body;
         
         // State variables
         let alarmTimeout;
@@ -249,6 +278,7 @@
             setupEventListeners();
             setDefaultTime();
             checkSavedAlarm();
+            requestNotificationPermission();
         }
         
         function setupEventListeners() {
@@ -288,16 +318,25 @@
                 
                 if (alarmDate > now) {
                     const timeUntilAlarm = alarmDate - now;
-                    alarmTimeout = setTimeout(triggerAlarm, timeUntilAlarm);
-                    alarmIsSet = true;
-                    setAlarmBtn.textContent = 'Cancel Alarm';
-                    statusEl.textContent = `Alarm set for ${alarmDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-                    wakeOptions.style.display = 'flex';
-                    interfaceEl.classList.add('hidden');
+                    setAlarmUI(alarmDate);
+                    alarmTimeout = setTimeout(() => {
+                        triggerAlarm();
+                        sendHelloNotification();
+                    }, timeUntilAlarm);
                 } else {
                     localStorage.removeItem('gentleAlarm');
                 }
             }
+        }
+        
+        function setAlarmUI(alarmDate) {
+            alarmIsSet = true;
+            setAlarmBtn.textContent = 'Cancel Alarm';
+            statusEl.textContent = `Alarm set for ${alarmDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
+            wakeOptions.style.display = 'flex';
+            setTimeout(() => {
+                interfaceEl.classList.add('hidden');
+            }, 500);
         }
         
         // Fullscreen functionality
@@ -322,6 +361,23 @@
         
         function hideInstallInstructions() {
             instructions.classList.remove('show');
+        }
+        
+        function requestNotificationPermission() {
+            if ('Notification' in window && Notification.permission !== 'granted') {
+                Notification.requestPermission();
+            }
+        }
+        
+        function sendHelloNotification() {
+            if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({
+                    action: 'SEND_NOTIFICATION',
+                    title: 'Hello :)',
+                    body: 'Good morning! Time to wake up! 🌞',
+                    icon: 'icon-192.png'
+                });
+            }
         }
         
         // Alarm functions
@@ -352,16 +408,12 @@
             
             const timeUntilAlarm = alarmDate - now;
             
-            alarmTimeout = setTimeout(triggerAlarm, timeUntilAlarm);
+            setAlarmUI(alarmDate);
             
-            alarmIsSet = true;
-            setAlarmBtn.textContent = 'Cancel Alarm';
-            statusEl.textContent = `Alarm set for ${alarmDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}`;
-            wakeOptions.style.display = 'flex';
-            
-            setTimeout(() => {
-                interfaceEl.classList.add('hidden');
-            }, 1000);
+            alarmTimeout = setTimeout(() => {
+                triggerAlarm();
+                sendHelloNotification();
+            }, timeUntilAlarm);
             
             localStorage.setItem('gentleAlarm', JSON.stringify({
                 time: alarmDate.getTime(),
@@ -369,12 +421,13 @@
             }));
         }
         
+        // Stop alarm
         function clearAlarm() {
             clearTimeout(alarmTimeout);
-            clearInterval(fadeInterval);
-            clearInterval(volumeInterval);
-            cancelAnimationFrame(animationFrame);
-            clearInterval(affirmationInterval);
+            if (fadeInterval) clearInterval(fadeInterval);
+            if (volumeInterval) clearInterval(volumeInterval);
+            if (animationFrame) cancelAnimationFrame(animationFrame);
+            if (affirmationInterval) clearInterval(affirmationInterval);
             
             alarmSound.pause();
             alarmSound.currentTime = 0;
@@ -396,6 +449,7 @@
             localStorage.removeItem('gentleAlarm');
         }
         
+        // Trigger alarm
         function triggerAlarm() {
             setRandomAlarmSound();
             
@@ -416,7 +470,7 @@
             // Fade in volume
             alarmSound.volume = 0;
             alarmSound.loop = true;
-            alarmSound.play();
+            alarmSound.play().catch(e => console.log("Audio play error:", e));
             
             volumeInterval = setInterval(() => {
                 if (alarmSound.volume < 0.6) {
@@ -437,8 +491,8 @@
                 y: Math.random() * (window.innerHeight - stopBtn.offsetHeight)
             };
             stopBtnVelocity = {
-                x: (Math.random() > 0.5 ? 1 : -1) * 1.5,
-                y: (Math.random() > 0.5 ? 1 : -1) * 1.5
+                x: (Math.random() > 0.5 ? 1 : -1) * 2,
+                y: (Math.random() > 0.5 ? 1 : -1) * 2
             };
             updateStopBtnPosition();
             startBouncing();
@@ -455,6 +509,7 @@
         function setRandomAlarmSound() {
             const randomIndex = Math.floor(Math.random() * 2) + 1;
             alarmSound.src = `Alarms/00${randomIndex}.mp3`;
+            console.log("Alarm sound set to:", alarmSound.src);
         }
         
         // Wake modes
@@ -485,9 +540,10 @@
         }
         
         function startMeditation() {
+            meditationSound.src = "https://assets.mixkit.co/music/preview/mixkit-zen-meditation-573.mp3";
             meditationSound.volume = 0.5;
             meditationSound.loop = true;
-            meditationSound.play();
+            meditationSound.play().catch(e => console.log("Meditation sound error:", e));
             
             affirmationEl.textContent = "Breathe in... Breathe out... Let go of tension...";
             affirmationEl.style.opacity = '1';
@@ -502,11 +558,20 @@
             stopBtnPosition.x += stopBtnVelocity.x;
             stopBtnPosition.y += stopBtnVelocity.y;
             
-            if (stopBtnPosition.x <= 0 || stopBtnPosition.x >= window.innerWidth - stopBtn.offsetWidth) {
+            // Boundary collision detection
+            if (stopBtnPosition.x <= 0) {
+                stopBtnPosition.x = 0;
+                stopBtnVelocity.x *= -1;
+            } else if (stopBtnPosition.x >= window.innerWidth - stopBtn.offsetWidth) {
+                stopBtnPosition.x = window.innerWidth - stopBtn.offsetWidth;
                 stopBtnVelocity.x *= -1;
             }
             
-            if (stopBtnPosition.y <= 0 || stopBtnPosition.y >= window.innerHeight - stopBtn.offsetHeight) {
+            if (stopBtnPosition.y <= 0) {
+                stopBtnPosition.y = 0;
+                stopBtnVelocity.y *= -1;
+            } else if (stopBtnPosition.y >= window.innerHeight - stopBtn.offsetHeight) {
+                stopBtnPosition.y = window.innerHeight - stopBtn.offsetHeight;
                 stopBtnVelocity.y *= -1;
             }
             
@@ -514,19 +579,4 @@
             animationFrame = requestAnimationFrame(updateBouncing);
         }
         
-        function updateStopBtnPosition() {
-            stopBtn.style.left = `${stopBtnPosition.x}px`;
-            stopBtn.style.top = `${stopBtnPosition.y}px`;
-        }
-        
-        // Window resize handler
-        function handleWindowResize() {
-            if (stopBtn.style.display === 'block') {
-                stopBtnPosition.x = Math.min(stopBtnPosition.x, window.innerWidth - stopBtn.offsetWidth);
-                stopBtnPosition.y = Math.min(stopBtnPosition.y, window.innerHeight - stopBtn.offsetHeight);
-                updateStopBtnPosition();
-            }
-        }
-    </script>
-</body>
-</html>
+        function updateStopBtnPosition(

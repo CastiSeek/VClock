@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gentle-alarm-v1';
+const CACHE_NAME = 'gentle-alarm-v2';
 const ASSETS = [
   '/',
   '/index.html',
@@ -23,11 +23,27 @@ self.addEventListener('fetch', event => {
 });
 
 self.addEventListener('message', event => {
-  if (event.data.action === 'triggerAlarm') {
-    self.registration.showNotification('Wake Up!', {
-      body: 'Your alarm is going off!',
-      icon: 'icon-192.png',
-      vibrate: [200, 100, 200, 100, 200]
+  if (event.data.action === 'SEND_NOTIFICATION') {
+    self.registration.showNotification(event.data.title, {
+      body: event.data.body,
+      icon: event.data.icon || 'icon-192.png',
+      vibrate: [200, 100, 200]
     });
   }
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window' }).then(clientList => {
+      for (const client of clientList) {
+        if (client.url === '/' && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow('/');
+      }
+    })
+  );
 });
